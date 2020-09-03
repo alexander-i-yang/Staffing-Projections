@@ -1,40 +1,32 @@
 import google.auth
 from google.cloud import bigquery
-from google.cloud import bigquery_storage_v1beta1
+from google.cloud import bigquery_storage
+import pandas as pd
 
-# Explicitly create a credentials object. This allows you to use the same
-# credentials for both the BigQuery and BigQuery Storage clients, avoiding
-# unnecessary API calls to fetch duplicate authentication tokens.
-credentials, your_project_id = google.auth.load_credentials_from_file(
-    filename="Staffing Projections-425ff1698984.json",
-    scopes=["https://www.googleapis.com/auth/cloud-platform"],
-    quota_project_id="staffing-projections"
-)
+def to_dataframe(rows):
+    arr = []
+    column_names = []
+    for r in rows:
+        if not column_names: column_names = list(r.keys())
+        arr.insert(-1, list(r.values()))
+    df = pd.DataFrame(arr)
+    df.columns = column_names
+    return df
 
-# Make clients.
-bqclient = bigquery.Client(
-    credentials=credentials,
-    project=your_project_id,
-)
-bqstorageclient = bigquery_storage_v1beta1.BigQueryStorageClient(
-    credentials=credentials
-)
 
+bqclient = bigquery.Client.from_service_account_json("Staffing-Projections-425ff1698984.json")
+bqstorageclient = bigquery_storage.BigQueryReadClient(
+    credentials=google.auth.load_credentials_from_file(filename="Staffing-Projections-425ff1698984.json",
+                                                       quota_project_id="staffing-projections")
+)
 query_string = """
 SELECT
-CONCAT(
-    'https://stackoverflow.com/questions/',
-    CAST(id as STRING)) as url,
-view_count
-FROM `bigquery-public-data.stackoverflow.posts_questions`
-WHERE tags like '%google-bigquery%'
-ORDER BY view_count DESC
+*
+FROM `staffing-projections.test_sample_dataset.test_sample_training_table`
+ORDER BY `hour`
 """
 
-dataframe = (
+rows = (
     bqclient.query(query_string)
-    .result()
-    .to_dataframe(bqstorage_client=bqstorageclient)
+        .result()
 )
-print(dataframe.head())
-
