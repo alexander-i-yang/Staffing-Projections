@@ -3,6 +3,7 @@ from google.cloud import bigquery
 from google.cloud import bigquery_storage
 import pandas as pd
 
+
 def to_dataframe(rows):
     arr = []
     column_names = []
