@@ -2,6 +2,9 @@ import google.auth
 from google.cloud import bigquery
 from google.cloud import bigquery_storage
 import pandas as pd
+from statsmodels.tsa.arima.model import ARIMA, ARIMAResults
+import statsmodels.tsa.statespace as sp
+from matplotlib import pyplot
 
 
 def to_dataframe(rows):
@@ -15,19 +18,90 @@ def to_dataframe(rows):
     return df
 
 
-bqclient = bigquery.Client.from_service_account_json("Staffing-Projections-425ff1698984.json")
+bqclient = bigquery.Client.from_service_account_json("Staffing Projections-425ff1698984.json")
 bqstorageclient = bigquery_storage.BigQueryReadClient(
-    credentials=google.auth.load_credentials_from_file(filename="Staffing-Projections-425ff1698984.json",
+    credentials=google.auth.load_credentials_from_file(filename="Staffing Projections-425ff1698984.json",
                                                        quota_project_id="staffing-projections")
 )
+
+# bqconfig = bigquery.QueryJobConfig(destination='staffing-projections.bucket_data.inbound_monthly_test_bucketized')
+
 query_string = """
 SELECT
-*
-FROM `staffing-projections.test_sample_dataset.test_sample_training_table`
-ORDER BY `hour`
+    time_interval,
+    call_time,
+    FROM(
+        SELECT
+            TIMESTAMP_SECONDS(30*60 * DIV(UNIX_SECONDS(time_answered), 30*60)) as time_interval,
+            SUM(TIMESTAMP_DIFF(time_terminated, time_answered, SECOND)) as call_time,
+        FROM staffing-projections.raw_data.inbound_monthly
+        WHERE time_answered IS NOT NULL
+        GROUP BY `time_interval`
+    )
 """
 
 rows = (
-    bqclient.query(query_string)
+    bqclient.query(
+        query_string,
+    )
         .result()
 )
+
+processed_data = to_dataframe(rows).sort_index().head(600)
+f = open("inbound_monthly.csv", "w")
+f.write(processed_data.to_csv())
+f.close()
+# cut_data = processed_data["call_time"]
+# num_test = 100
+# train = cut_data.head(600 - num_test)
+# test = cut_data.tail(num_test)
+
+# history = [x for x in train]
+# predictions = list()
+# extra = 50
+# for t in range(len(test)+1):
+#     model = ARIMA(history, order=(6, 1, 0))
+#     model_fit = model.fit()
+#     output = model_fit.forecast(steps=1)
+#     test_index = t+600-num_test
+#     yhat = output[0]
+#     if test_index < 600:
+#         obs = test[test_index]
+#         history.append(obs)
+#         predictions.append(yhat)
+#     else:
+#         yhat = model_fit.forecast(steps=extra)
+#         predictions.extend(yhat)
+#     print('predicted=%f, expected=%f' % (yhat, obs))
+# error = mean_squared_error(test, predictions)
+# print('Test MSE: %.3f' % error)
+# print(len(predictions))
+# predictions = pd.DataFrame(predictions)
+# predictions['interval'] = range(600-num_test, 600+extra)
+# predictions = predictions.set_index('interval')
+# print(predictions)
+
+# min = 10000000
+# min_thing = ()
+# for p in range(0, 14):
+#     for d in range(0, 2):
+#         for q in range(0, 2):
+#             model = ARIMA(train, order=(p,d,q))
+#             results = model.fit()
+#             predictions = results.forecast(steps=100)
+#             aic = results.aic
+#             if aic < min:
+#                 min = aic
+#                 min_thing = (p, d, q)
+#             print("%i%i%i - %f" % (p, d, q, aic))
+# print(min, min_thing)
+
+# Best: (6, 0, 1) or (13, 1, 1)
+# model = sp.SARIMAX(cut_data, order=(13, 1, 1))
+# model_fit = model.fit()
+# # print(model_fit.summary())
+# predictions = model_fit.forecast(steps=100)
+#
+# pyplot.plot(cut_data)
+# pyplot.plot(predictions)
+# pyplot.show()

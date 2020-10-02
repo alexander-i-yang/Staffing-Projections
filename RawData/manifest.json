@@ -1,0 +1,40 @@
+{
+  "tables": [
+    {
+      "table_name": "InboundMonthly",
+      "file_patterns": [
+        "gs://RawData/Inboundmonthly*.csv"
+      ],
+      "columns": [
+        {"column_name": "Mid", "type_name": "INT64"},
+        {"column_name": "ProgramId", "type_name": "INT64"},
+        {"column_name": "TimeOffered", "type_name": "TIMESTAMP"},
+        {"column_name": "TimeAnswered", "type_name": "TIMESTAMP"},
+        {"column_name": "TimeTerminated", "type_name": "TIMESTAMP"}
+      ]
+    },
+    {
+      "table_name": "OutboundMonthly",
+      "file_patterns": [
+        "gs://RawData/Outbounddialercalls*.csv"
+      ],
+      "columns": [
+        {"column_name": "WhenCalled", "type_name": "TIMESTAMP"},
+        {"column_name": "InboundId", "type_name": "INT64"},
+        {"column_name": "ConsultId", "type_name": "INT64"},
+        {"column_name": "ProgramId", "type_name": "INT64"}
+      ]
+    },
+    {
+      "table_name": "Programs",
+      "file_patterns": [
+        "gs://RawData/programs*.csv"
+      ],
+      "columns": [
+        {"column_name": "ProgramId", "type_name": "INT64"},
+        {"column_name": "PName", "type_name": "STRING"},
+        {"column_name": "PAbbrev", "type_name": "STRING"}
+      ]
+    }
+  ]
+}
