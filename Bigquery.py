@@ -2,9 +2,6 @@ import google.auth
 from google.cloud import bigquery
 from google.cloud import bigquery_storage
 import pandas as pd
-from statsmodels.tsa.arima.model import ARIMA, ARIMAResults
-import statsmodels.tsa.statespace as sp
-from matplotlib import pyplot
 
 
 def to_dataframe(rows):
@@ -18,26 +15,40 @@ def to_dataframe(rows):
     return df
 
 
-bqclient = bigquery.Client.from_service_account_json("Staffing Projections-425ff1698984.json")
+bqclient = bigquery.Client.from_service_account_json("Staffing-Projections-425ff1698984.json")
 bqstorageclient = bigquery_storage.BigQueryReadClient(
-    credentials=google.auth.load_credentials_from_file(filename="Staffing Projections-425ff1698984.json",
+    credentials=google.auth.load_credentials_from_file(filename="Staffing-Projections-425ff1698984.json",
                                                        quota_project_id="staffing-projections")
 )
 
 # bqconfig = bigquery.QueryJobConfig(destination='staffing-projections.bucket_data.inbound_monthly_test_bucketized')
 
 query_string = """
+#standardSQL
+WITH
+  inbound_monthly AS (SELECT * FROM staffing-projections.raw_data.inbound_monthly),
+  program_ids AS (SELECT * FROM staffing-projections.raw_data.programs)
 SELECT
-    time_interval,
-    call_time,
-    FROM(
-        SELECT
-            TIMESTAMP_SECONDS(30*60 * DIV(UNIX_SECONDS(time_answered), 30*60)) as time_interval,
-            SUM(TIMESTAMP_DIFF(time_terminated, time_answered, SECOND)) as call_time,
-        FROM staffing-projections.raw_data.inbound_monthly
-        WHERE time_answered IS NOT NULL
-        GROUP BY `time_interval`
-    )
+  time_interval,
+  inbound_monthly.program_id,
+  program_ids.p_name,
+  call_time
+FROM(
+  SELECT
+    program_id,
+    SUM(TIMESTAMP_DIFF(time_terminated, time_answered, SECOND)) AS call_time,
+    TIMESTAMP_SECONDS(30*60 * DIV(UNIX_SECONDS(time_answered), 30*60)) AS time_interval,
+  FROM
+    inbound_monthly
+  WHERE
+    time_answered IS NOT NULL
+  GROUP BY program_id, time_interval
+  ORDER BY time_interval) AS inbound_monthly
+LEFT JOIN
+  program_ids
+ON
+  program_ids.program_id = inbound_monthly.program_id
+ORDER BY time_interval
 """
 
 rows = (
@@ -47,7 +58,7 @@ rows = (
         .result()
 )
 
-processed_data = to_dataframe(rows).sort_index().head(600)
+processed_data = to_dataframe(rows).sort_index()
 f = open("inbound_monthly.csv", "w")
 f.write(processed_data.to_csv())
 f.close()
