@@ -20,9 +20,8 @@ def replace_null(filename, new_filename):
         with open(new_filename, "wt") as fout:
             # i = 0
             for line in fin:
-                fout.write(line.replace(null_str, ''))
-                # i += 1
-                # if i > 500: break
+                x = line.replace(null_str, '')
+                fout.write(x.replace("\"", ""))
     fin.close()
     fout.close()
 
@@ -51,8 +50,24 @@ def load_table(table_id, filename, schema):
 
 dataset_id = "staffing-projections.raw_data"
 
-replace_null("RawData/inboundmonthly.csv", "RawData/processed-inbound-monthly.csv")
-filename = "RawData/processed-inbound-monthly.csv"
+replace_null("RawData/report.csv", "RawData/processed-report.csv")
+filename = "RawData/processed-report.csv"
+
+load_table(
+    table_id="%s.report" % dataset_id,
+    filename=filename,
+    schema=[
+        bigquery.SchemaField("skillset_id", "STRING"),
+        bigquery.SchemaField("skillset_name", "STRING"),
+        bigquery.SchemaField("program_id", "STRING"),
+        bigquery.SchemaField("program_name", "STRING"),
+        bigquery.SchemaField("program_abbrev", "STRING"),
+        bigquery.SchemaField("engagement_id", "STRING"),
+        bigquery.SchemaField("engagement", "STRING"),
+        bigquery.SchemaField("bu_id", "STRING"),
+        bigquery.SchemaField("business_unit", "STRING"),
+    ]
+)
 # replace_null("RawData/outbounddialercalls.csv", "RawData/processed-outbound-monthly.csv")
 # df = pd.read_csv("RawData/processed-inbound-monthly.csv")
 # dfo = pd.read_csv("RawData/processed-outbound-monthly.csv")
@@ -69,17 +84,17 @@ filename = "RawData/processed-inbound-monthly.csv"
 #     ]
 # )
 
-load_table(
-    table_id="%s.inbound_monthly" % dataset_id,
-    filename="RawData/processed-inbound-monthly.csv",
-    schema=[
-        bigquery.SchemaField("mid", "INT64"),
-        bigquery.SchemaField("program_id", "INT64"),
-        bigquery.SchemaField("time_offered", "TIMESTAMP"),
-        bigquery.SchemaField("time_answered", "TIMESTAMP"),
-        bigquery.SchemaField("time_terminated", "TIMESTAMP"),
-    ]
-)
+# load_table(
+#     table_id="%s.inbound_monthly" % dataset_id,
+#     filename="RawData/processed-inbound-monthly.csv",
+#     schema=[
+#         bigquery.SchemaField("mid", "INT64"),
+#         bigquery.SchemaField("program_id", "INT64"),
+#         bigquery.SchemaField("time_offered", "TIMESTAMP"),
+#         bigquery.SchemaField("time_answered", "TIMESTAMP"),
+#         bigquery.SchemaField("time_terminated", "TIMESTAMP"),
+#     ]
+# )
 
 # load_table(
 #     table_id="%s.outbound_monthly" % dataset_id,

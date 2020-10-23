@@ -2,6 +2,7 @@ import google.auth
 from google.cloud import bigquery
 from google.cloud import bigquery_storage
 import pandas as pd
+import datetime
 
 
 def to_dataframe(rows):
@@ -15,6 +16,10 @@ def to_dataframe(rows):
     return df
 
 
+def get_data_by_bu(rawdf, bu_id):
+    return (rawdf.loc[rawdf.bu_id == bu_id])
+
+
 bqclient = bigquery.Client.from_service_account_json("Staffing-Projections-425ff1698984.json")
 bqstorageclient = bigquery_storage.BigQueryReadClient(
     credentials=google.auth.load_credentials_from_file(filename="Staffing-Projections-425ff1698984.json",
@@ -24,31 +29,27 @@ bqstorageclient = bigquery_storage.BigQueryReadClient(
 # bqconfig = bigquery.QueryJobConfig(destination='staffing-projections.bucket_data.inbound_monthly_test_bucketized')
 
 query_string = """
-#standardSQL
 WITH
   inbound_monthly AS (SELECT * FROM staffing-projections.raw_data.inbound_monthly),
-  program_ids AS (SELECT * FROM staffing-projections.raw_data.programs)
+  program_ids AS (SELECT * FROM staffing-projections.raw_data.programs),
+  report AS (SELECT program_id, bu_id, business_unit FROM staffing-projections.raw_data.report)
 SELECT
-  time_interval,
-  inbound_monthly.program_id,
-  program_ids.p_name,
-  call_time
+  *
 FROM(
   SELECT
-    program_id,
+    bu_id,
+    MAX(business_unit) AS business_unit,
     SUM(TIMESTAMP_DIFF(time_terminated, time_answered, SECOND)) AS call_time,
-    TIMESTAMP_SECONDS(30*60 * DIV(UNIX_SECONDS(time_answered), 30*60)) AS time_interval,
+    TIMESTAMP_SECONDS(60*60 * DIV(UNIX_SECONDS(time_answered), 60*60)) AS time_interval,
   FROM
     inbound_monthly
+  FULL OUTER JOIN
+    report
+  USING(program_id)
   WHERE
     time_answered IS NOT NULL
-  GROUP BY program_id, time_interval
-  ORDER BY time_interval) AS inbound_monthly
-LEFT JOIN
-  program_ids
-ON
-  program_ids.program_id = inbound_monthly.program_id
-ORDER BY time_interval
+  GROUP BY bu_id, time_interval
+)
 """
 
 rows = (
@@ -58,61 +59,47 @@ rows = (
         .result()
 )
 
-processed_data = to_dataframe(rows).sort_index()
+rawdf = to_dataframe(rows).sort_index()
+
+print(rawdf)
+
+rawdf['bu_id'] = rawdf['bu_id'].fillna(0)
+rawdf = rawdf.astype({'bu_id': 'int32'})
+rawdf['time_interval'] = pd.to_datetime(rawdf['time_interval'])
+bu_ids = rawdf['bu_id'].unique().tolist()
+bu_units = rawdf['business_unit'].unique().tolist()
+print(bu_ids)
+print(bu_units)
+rawdf.sort_values(by=["bu_id", "time_interval"], inplace=True)
+rawdf.set_index(keys=["bu_id"], drop=False, inplace=True)
+
+timestamps = rawdf['time_interval'].unique().to_numpy()
+timestamps.sort()
+start_timestamp = timestamps[0]
+end_timestamp = timestamps[-1]
+points_per_id = int((end_timestamp - start_timestamp).total_seconds() / (60 * 60))
+
+print(rawdf)
+
+finaldf = pd.DataFrame()
+for counter in range(len(bu_ids)):
+    # if counter > 3: break
+    cur_id = bu_ids[counter]
+    cur_bu_unit = bu_units[counter]
+    if counter % 10 == 1:
+        print("%i: %i/%i" % (cur_id, counter, len(bu_ids)))
+    program_df = get_data_by_bu(rawdf, cur_id)
+
+    rows_to_add = []
+    for i in range(points_per_id + 1):
+        cur_timestamp = start_timestamp + datetime.timedelta(0, i * 60 * 60)
+        if cur_timestamp not in program_df.values:
+            rows_to_add.append([cur_id, cur_bu_unit, 0, cur_timestamp])
+    df_to_add = pd.DataFrame(rows_to_add, columns=program_df.columns)
+    program_df = program_df.append(df_to_add, ignore_index=True)
+    program_df.sort_values(by="time_interval", inplace=True, ignore_index=True)
+    finaldf = finaldf.append(program_df)
+
 f = open("inbound_monthly.csv", "w")
-f.write(processed_data.to_csv())
+f.write(finaldf.to_csv())
 f.close()
-# cut_data = processed_data["call_time"]
-# num_test = 100
-# train = cut_data.head(600 - num_test)
-# test = cut_data.tail(num_test)
-
-# history = [x for x in train]
-# predictions = list()
-# extra = 50
-# for t in range(len(test)+1):
-#     model = ARIMA(history, order=(6, 1, 0))
-#     model_fit = model.fit()
-#     output = model_fit.forecast(steps=1)
-#     test_index = t+600-num_test
-#     yhat = output[0]
-#     if test_index < 600:
-#         obs = test[test_index]
-#         history.append(obs)
-#         predictions.append(yhat)
-#     else:
-#         yhat = model_fit.forecast(steps=extra)
-#         predictions.extend(yhat)
-#     print('predicted=%f, expected=%f' % (yhat, obs))
-# error = mean_squared_error(test, predictions)
-# print('Test MSE: %.3f' % error)
-# print(len(predictions))
-# predictions = pd.DataFrame(predictions)
-# predictions['interval'] = range(600-num_test, 600+extra)
-# predictions = predictions.set_index('interval')
-# print(predictions)
-
-# min = 10000000
-# min_thing = ()
-# for p in range(0, 14):
-#     for d in range(0, 2):
-#         for q in range(0, 2):
-#             model = ARIMA(train, order=(p,d,q))
-#             results = model.fit()
-#             predictions = results.forecast(steps=100)
-#             aic = results.aic
-#             if aic < min:
-#                 min = aic
-#                 min_thing = (p, d, q)
-#             print("%i%i%i - %f" % (p, d, q, aic))
-# print(min, min_thing)
-
-# Best: (6, 0, 1) or (13, 1, 1)
-# model = sp.SARIMAX(cut_data, order=(13, 1, 1))
-# model_fit = model.fit()
-# # print(model_fit.summary())
-# predictions = model_fit.forecast(steps=100)
-#
-# pyplot.plot(cut_data)
-# pyplot.plot(predictions)
-# pyplot.show()
