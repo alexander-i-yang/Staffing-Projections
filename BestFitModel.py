@@ -92,8 +92,8 @@ def smooth_model(x, y):
 
     return z_val
 
-
-def tf_train(observation_index_points, observations_, program_id):
+# Smooths data given x axis and y axis
+def tf_smooth(observations_):
     gp_joint_model = tfd.JointDistributionNamed({
         'amplitude': tfd.LogNormal(loc=0., scale=np.float64(1.)),
         'length_scale': tfd.LogNormal(loc=0., scale=np.float64(1.)),
@@ -185,7 +185,7 @@ def tf_train(observation_index_points, observations_, program_id):
 
     num_samples = NUM_TRAINING_POINTS
     samples = gprm.sample(num_samples)
-
+    print(samples[0, :])
     return samples[0, :]
 
 
@@ -209,6 +209,8 @@ START_TIME = time.time()
 
 final_df = pd.DataFrame()
 
+print(final_df)
+
 for counter in range(len(bu_ids)):
     # if counter > 3: break
     cur_id = bu_ids[counter]
@@ -216,12 +218,15 @@ for counter in range(len(bu_ids)):
     # if counter % 10 == 1:
     print("%i: %i/%i" % (cur_id, counter, len(bu_ids)))
     program_df = get_data_by_bu(rawdf, cur_id)
-    # print(program_df)
+    print(program_df)
 
     NUM_TRAINING_POINTS = len(program_df)
     observation_index_points_ = range(0, NUM_TRAINING_POINTS)
     observation_index_points_ = [[float(x)] for x in observation_index_points_]
     observations_ = np.asarray(program_df['call_time'].astype(float))
+
+    print('call_time')
+    print(program_df['call_time'])
 
     # TODO: replace fake_occupancy_ with real occupancy data
     fake_occupancy_ = np.linspace(0.75, 0.75, NUM_TRAINING_POINTS)
