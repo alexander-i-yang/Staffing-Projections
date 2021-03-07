@@ -7,6 +7,19 @@ tfd = tfp.distributions
 tfk = tfp.math.psd_kernels
 tf.enable_v2_behavior()
 
+def moving_average(N, mylist):
+    cumsum, moving_aves = [0], []
+    n_half = int((N)/2)
+    moving_aves.extend(mylist[:n_half])
+    for i, x in enumerate(mylist, 1):
+        cumsum.append(cumsum[i - 1] + x)
+        if i >= N:
+            moving_ave = (cumsum[i] - cumsum[i - N]) / N
+            # can do stuff with moving_ave here
+            moving_aves.append(moving_ave)
+    moving_aves.extend(mylist[len(mylist)-n_half:])
+    # print(moving_aves)
+    return(moving_aves)
 
 def tf_smooth(
         observation_index_points_,
@@ -88,10 +101,9 @@ def tf_smooth(
         with tf.GradientTape() as tape:
             loss = -target_log_prob(amplitude_var, length_scale_var,
                                     observation_noise_variance_var)
-        grads = tape.gradient(loss, trainable_variables)
-        optimizer.apply_gradients(zip(grads, trainable_variables))
-        lls_[i] = loss
-
+            grads = tape.gradient(loss, trainable_variables)
+            optimizer.apply_gradients(zip(grads, trainable_variables))
+            lls_[i] = loss
     num_training_points = len(observation_index_points_)
     predictive_index_points_ = np.linspace(0, num_training_points, num_training_points, dtype=np.float64)
     predictive_index_points_ = predictive_index_points_[..., np.newaxis]
